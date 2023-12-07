@@ -118,7 +118,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-    def check(self, computer, access_destination, access_source, access_net_protocol, access_ports):
+    def check(self, computer):
 
         print('Вызов кнопкой')
         print (self.access_source)
@@ -126,81 +126,105 @@ class MainWindow(QtWidgets.QMainWindow):
         print (self.access_net_protocol)
         print (self.access_ports)
 
+        # Если IP компьютера в чёрном списке, блокируем его
         if computer.ip_address in self.black_list:
             computer.is_allowed = False
             return
-        source_range, destination_range = False, False
-        if len(access_source) == 2:
-            source_range = True
-        if len(access_destination) == 2:
-            destination_range = True
 
-        if source_range and computer.is_protected:
-            if self.ip_range(computer.ip_address, access_source[0], access_source[1]): # здесь учитываем только отправителей
-                    chk1 = False
-                    for pr in computer.supported_protocols:
-                        if pr in access_net_protocol:
-                            chk1 = True
-                            break
-                    chk2 = False
-                    for port in computer.ports:
-                        if port == access_ports:
-                            chk2 = True
-                    if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
-                        computer.is_allowed = True
-                        computer.is_connected_before = True
+        # Проверяем доступ по источнику
+        if self.access_source and computer.is_protected and len (self.access_source) == 2:
+            if self.ip_range (computer.ip_address, self.access_source[0], self.access_source[1]):
+                computer.is_allowed = any (pr in self.access_net_protocol for pr in computer.supported_protocols) and self.access_ports in computer.ports
 
-        if destination_range and not computer.is_protected:
-            if self.ip_range(computer.ip_address, access_destination[0], access_destination[1]):
-                chk1 = False
-                for pr in computer.supported_protocols:
-                    if pr in access_net_protocol:
-                        chk1 = True
-                        break
-                chk2 = False
-                for port in computer.ports:
-                    if port == access_ports:
-                        chk2 = True
-                if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
-                    computer.is_allowed = True
-                    computer.is_connected_before = True
+        # Проверяем доступ по приемнику
+        elif self.access_destination and not computer.is_protected and len (self.access_destination) == 2:
+            if self.ip_range (computer.ip_address, self.access_destination[0], self.access_destination[1]):
+                computer.is_allowed = any (pr in self.access_net_protocol for pr in computer.supported_protocols) and self.access_ports in computer.ports
 
-        elif computer.ip_address in (access_source):
-            if not computer.is_protected:  # здесь учитываем только отправителей
-                return
-            chk1 = False
-            for pr in computer.supported_protocols:
-                if pr in access_net_protocol:
-                    chk1 = True
-                    break
-            chk2 = False
-            for port in computer.ports:
-                if port == access_ports:
-                    chk2 = True
-            if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
-                computer.is_allowed = True
-                computer.is_connected_before = True
+        # Проверяем общий доступ по IP
+        elif self.access_source and not computer.is_protected and computer.ip_address in self.access_source:
+            computer.is_allowed = any (pr in self.access_net_protocol for pr in computer.supported_protocols) and self.access_ports in computer.ports
 
-        elif computer.ip_address in (access_destination):
-            if computer.is_protected:  # здесь учитываем только получателей
-                return
-            chk1 = False
-            for pr in computer.supported_protocols:
-                if pr in access_net_protocol:
-                    chk1 = True
-                    break
-            chk2 = False
-            for port in computer.ports:
-                if port == access_ports:
-                    chk2 = True
-            if chk1 and chk2:  # условие разрешения соединения
-                computer.is_allowed = True
-                computer.is_connected_before = True
+        # Проверяем общий доступ по IP
+        elif self.access_destination and computer.is_protected and computer.ip_address in self.access_destination:
+            computer.is_allowed = any (pr in self.access_net_protocol for pr in computer.supported_protocols) and self.access_ports in computer.ports
+
+
+        # if computer.ip_address in self.black_list:
+        #     computer.is_allowed = False
+        #     return
+        # source_range, destination_range = False, False
+        # if len(self.access_source) == 2:
+        #     source_range = True
+        # if len(self.access_destination) == 2:
+        #     destination_range = True
+        #
+        # if source_range and computer.is_protected:
+        #     if self.ip_range(computer.ip_address, self.access_source[0], self.access_source[1]): # здесь учитываем только отправителей
+        #             chk1 = False
+        #             for pr in computer.supported_protocols:
+        #                 if pr in self.access_net_protocol:
+        #                     chk1 = True
+        #                     break
+        #             chk2 = False
+        #             for port in computer.ports:
+        #                 if port == self.access_ports:
+        #                     chk2 = True
+        #             if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
+        #                 computer.is_allowed = True
+        #                 computer.is_connected_before = True
+        #
+        # if destination_range and not computer.is_protected:
+        #     if self.ip_range(computer.ip_address, self.access_destination[0], self.access_destination[1]):
+        #         chk1 = False
+        #         for pr in computer.supported_protocols:
+        #             if pr in self.access_net_protocol:
+        #                 chk1 = True
+        #                 break
+        #         chk2 = False
+        #         for port in computer.ports:
+        #             if port == self.access_ports:
+        #                 chk2 = True
+        #         if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
+        #             computer.is_allowed = True
+        #             computer.is_connected_before = True
+        #
+        # elif computer.ip_address in (self.access_source):
+        #     if not computer.is_protected:  # здесь учитываем только отправителей
+        #         return
+        #     chk1 = False
+        #     for pr in computer.supported_protocols:
+        #         if pr in self.access_net_protocol:
+        #             chk1 = True
+        #             break
+        #     chk2 = False
+        #     for port in computer.ports:
+        #         if port == self.access_ports:
+        #             chk2 = True
+        #     if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
+        #         computer.is_allowed = True
+        #         computer.is_connected_before = True
+        #
+        # elif computer.ip_address in (self.access_destination):
+        #     if computer.is_protected:  # здесь учитываем только получателей
+        #         return
+        #     chk1 = False
+        #     for pr in computer.supported_protocols:
+        #         if pr in self.access_net_protocol:
+        #             chk1 = True
+        #             break
+        #     chk2 = False
+        #     for port in computer.ports:
+        #         if port == self.access_ports:
+        #             chk2 = True
+        #     if chk1 and chk2:  # условие разрешения соединения
+        #         computer.is_allowed = True
+        #         computer.is_connected_before = True
 
     def on_button_press(self):
         self.getting_commands ()
         for comp in self.all_comps:
-            self.check(comp, self.access_destination, self.access_source, self.access_net_protocol, self.access_ports)
+            self.check(comp)
             print(f"{comp.__name__} {comp.is_allowed}")
 
 
