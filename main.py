@@ -1,22 +1,224 @@
 from PyQt5 import QtWidgets, uic
+from PyQt5.Qt import Qt
 from Classes import *
+from Help import Ui_Help
 import random
 import re
 import sys
+from getkey import getkey, keys
+import keyboard
 
-# спользовать модуль keyboard
 
 
 class MainWindow(QtWidgets.QMainWindow):
+
+    def open_help_window(self):
+        self.window = QtWidgets.QDialog()
+        self.ui = Ui_Help()
+        self.ui.setupUi(self.window)
+        self.window.show()
+
+
+    # ФУНКЦИИ ЛОГИКИ
+
+    def ip_range(self, ip, range_start, range_end):
+        ip_nums = ip.split('.')
+        start = range_start.split('.')
+        end = range_end.split('.')
+        return int(start[0]) <= int(ip_nums[0]) <= int(end[0]) and int(start[1]) <= int(ip_nums[1]) <= int(end[1]) and \
+               int(start[2]) <= int(ip_nums[2]) <= int(end[2]) and int(start[3]) <= int(ip_nums[3]) <= int(end[3])
+
+    def generate_computer(self, name_suffix, is_protected):
+        nm = f"Computer{name_suffix}"
+        comp = Computer (nm)
+        self.all_comps.append (comp)
+
+        if is_protected:
+            self.all_protected_comps.append (comp)
+            comp.is_protected = True
+        else:
+            self.all_non_protected_comps.append (comp)
+            comp.is_protected = False
+
+        comp.gen_ip ()
+        comp.supported_protocols = random.sample (self.list_of_protocols, k=random.randint (2, 4))
+        comp.ports = random.sample (self.list_of_ports, k=random.randint (2, 4))
+
+    def on_press_enter(self):
+
+        self.user_input = self.lineEdit.text()
+        self.lineEdit.setText('')
+        self.text_prev_commands += f'{self.user_input}\n'
+        self.textEdit.setPlainText(self.text_prev_commands)
+
+
+
+    def getting_commands(self):
+        commands_mapping = {
+            'set ip sender': self.set_ip_sender,
+            'set ip sender range': self.set_ip_sender,
+            'set ip receiver': self.set_ip_receiver,
+            'set ip receiver range': self.set_ip_receiver,
+            'set ports': self.set_ports,
+            'set protocol': self.set_protocol,
+            'block ip': self.block_ip,
+            'remove ports': self.remove_ports,
+            'remove protocol': self.remove_protocol,
+            'clear ip': self.clear_ip,
+            'clear ports': self.clear_ports,
+            'clear protocol': self.clear_protocol
+        }
+
+        commands = self.text_prev_commands.splitlines ()
+
+        for command in commands:
+            for keyword, action in commands_mapping.items ():
+                if re.search (keyword, command):
+                    action (command)
+                    break
+
+    def set_ip_sender(self, command):
+        self.access_source = re.findall (r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command)
+
+    def set_ip_receiver(self, command):
+        self.access_destination = (re.findall (r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command))
+
+    def set_ports(self, command):
+        self.access_ports += (re.findall (r'\b[A-Z]{2,5}\b', command))
+
+    def set_protocol(self, command):
+        self.access_net_protocol += (re.findall (r'\b[A-Z]{2,5}\b', command))
+
+    def block_ip(self, command):
+        self.black_list += (re.findall(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command)) #[0]
+
+    def remove_ports(self, command):
+        for prt in (re.findall (r'\b[A-Z]{2,5}\b', command)):
+            try:
+                self.access_ports.remove (prt)
+            except:
+                continue
+
+    def remove_protocol(self, command):
+        for prt in (re.findall (r'\b[A-Z]{2,5}\b', command)):
+            try:
+                self.access_net_protocol.remove (prt)
+            except:
+                continue
+
+    def clear_ip(self, command):
+        self.access_source = []
+        self.access_destination = []
+
+    def clear_ports(self, command):
+        self.access_ports = []
+
+    def clear_protocol(self, command):
+        self.access_net_protocol = []
+
+
+
+    def check(self, computer, access_destination, access_source, access_net_protocol, access_ports):
+
+        print('Вызов кнопкой')
+        print (self.access_source)
+        print (self.access_destination)
+        print (self.access_net_protocol)
+        print (self.access_ports)
+
+        if computer.ip_address in self.black_list:
+            computer.is_allowed = False
+            return
+        source_range, destination_range = False, False
+        if len(access_source) == 2:
+            source_range = True
+        if len(access_destination) == 2:
+            destination_range = True
+
+        if source_range and computer.is_protected:
+            if self.ip_range(computer.ip_address, access_source[0], access_source[1]): # здесь учитываем только отправителей
+                    chk1 = False
+                    for pr in computer.supported_protocols:
+                        if pr in access_net_protocol:
+                            chk1 = True
+                            break
+                    chk2 = False
+                    for port in computer.ports:
+                        if port == access_ports:
+                            chk2 = True
+                    if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
+                        computer.is_allowed = True
+                        computer.is_connected_before = True
+
+        if destination_range and not computer.is_protected:
+            if self.ip_range(computer.ip_address, access_destination[0], access_destination[1]):
+                chk1 = False
+                for pr in computer.supported_protocols:
+                    if pr in access_net_protocol:
+                        chk1 = True
+                        break
+                chk2 = False
+                for port in computer.ports:
+                    if port == access_ports:
+                        chk2 = True
+                if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
+                    computer.is_allowed = True
+                    computer.is_connected_before = True
+
+        elif computer.ip_address in (access_source):
+            if not computer.is_protected:  # здесь учитываем только отправителей
+                return
+            chk1 = False
+            for pr in computer.supported_protocols:
+                if pr in access_net_protocol:
+                    chk1 = True
+                    break
+            chk2 = False
+            for port in computer.ports:
+                if port == access_ports:
+                    chk2 = True
+            if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
+                computer.is_allowed = True
+                computer.is_connected_before = True
+
+        elif computer.ip_address in (access_destination):
+            if computer.is_protected:  # здесь учитываем только получателей
+                return
+            chk1 = False
+            for pr in computer.supported_protocols:
+                if pr in access_net_protocol:
+                    chk1 = True
+                    break
+            chk2 = False
+            for port in computer.ports:
+                if port == access_ports:
+                    chk2 = True
+            if chk1 and chk2:  # условие разрешения соединения
+                computer.is_allowed = True
+                computer.is_connected_before = True
+
+    def on_button_press(self):
+        self.getting_commands ()
+        for comp in self.all_comps:
+            self.check(comp, self.access_destination, self.access_source, self.access_net_protocol, self.access_ports)
+            print(f"{comp.__name__} {comp.is_allowed}")
+
+
+
     def __init__(self):
         super(MainWindow, self).__init__()
         # Загрузить .ui файл
-        uic.loadUi("FW_0.0.4.ui", self)
-        # Привязать метод к кнопке
-        self.pushButton_2.clicked.connect(self.on_button_click)
+        uic.loadUi("FW_0.0.5.ui", self)
 
-        list_of_protocols = ['CLNS', 'DDP', 'EGP', 'EIGRP', 'ICMP', 'IGMP']
-        list_of_ports = ['FTP', 'SMTP', 'SSH', 'HTTP', 'HTTPS', 'POP']
+        self.text_prev_commands = ''  # хранение истории ввода
+        self.user_input = ''          # нынешняя введенная строка
+
+        self.pushButton.clicked.connect (self.open_help_window)
+        self.pushButton_2.clicked.connect (self.on_button_press)
+        self.lineEdit.returnPressed.connect (self.on_press_enter)
+
+        self.list_of_protocols = ['CLNS', 'DDP', 'EGP', 'EIGRP', 'ICMP', 'IGMP']
+        self.list_of_ports = ['FTP', 'SMTP', 'SSH', 'HTTP', 'HTTPS', 'POP']
         self.all_comps = []
         comps_protected = ''
         comps_non_protected = ''
@@ -24,30 +226,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.all_non_protected_comps = []
         self.black_list = []
 
+        self.access_destination = []
+        self.access_source = []
+        self.access_net_protocol = []
+        self.access_ports = []
+
+        # Генерация защищенных компьютеров
         for i in range (random.randint (2, 5)):
-            nm = f"Computer{chr (i + 65)}"
-            comp = Computer (nm)
-            self.all_comps.append (comp)
-            self.all_protected_comps.append (comp)
-            comp.is_protected = True
-            comp.gen_ip ()
-            comp.supported_protocols = random.sample (list_of_protocols, k=random.randint (2, 4))
-            comp.ports = random.sample (list_of_ports, k=random.randint (2, 4))
-            #sp = ', '.join(comp.supported_protocols)
-            #p = ', '.join(comp.ports)
+            self.generate_computer (chr (i + 65), is_protected=True)
 
-            #comps_protected += f'{comp.__name__}    {comp.ip_address}  Порты: {p} \n' \
-            #                       f'Протоколы: {sp}\n\n'
-
+        # Генерация не защищенных компьютеров
         for j in range (random.randint (2, 5)):
-            nm = f"Computer{j + 1}"
-            comp = Computer (nm)
-            self.all_comps.append (comp)
-            self.all_non_protected_comps.append (comp)
-            comp.is_protected = False
-            comp.gen_ip ()
-            comp.supported_protocols = random.sample (list_of_protocols, k=random.randint (2, 4))
-            comp.ports = random.sample (list_of_ports, k=random.randint (2, 4))
+            self.generate_computer (str (j + 1), is_protected=False)
 
         self.protected_comp_for_task = random.choice (self.all_protected_comps)
         self.non_protected_comp_for_task = random.choice (self.all_non_protected_comps)
@@ -78,180 +268,15 @@ class MainWindow(QtWidgets.QMainWindow):
             comps_non_protected += f'{comp.__name__}    {comp.ip_address}  Порты: {p} \n' \
                                    f'Протоколы: {sp}\n\n'
 
-        #ПЕРЕДВИНУТЬ ПРОВЕРКУ И СДЕЛАТЬ ВЫВОД ТЕКСТА ПОСЛЕ НЕЕ
-
 
         self.label_secure_comp.setText(f"{comps_protected}")
         self.label_non_secure_comp.setText(f"{comps_non_protected}")
         self.label_task_text.setText(f"   Отправить данные с компьютера {self.protected_comp_for_task.__name__} на {self.non_protected_comp_for_task.__name__}")
 
 
-    def ip_range(self, ip, range_start, range_end):
-        ip_nums = ip.split('.')
-        start = range_start.split('.')
-        end = range_end.split('.')
-        return int(start[0]) <= int(ip_nums[0]) <= int(end[0]) and int(start[1]) <= int(ip_nums[1]) <= int(end[1]) and \
-               int(start[2]) <= int(ip_nums[2]) <= int(end[2]) and int(start[3]) <= int(ip_nums[3]) <= int(end[3])
-
-    def check(self, computer, access_destination, access_source, access_net_protocol, access_ports):
-        if computer.ip_address in self.black_list:
-            computer.is_allowed = False
-            return
-        source_range, destination_range = False, False
-        if len(access_source) == 2:
-            source_range = True
-        if len(access_destination) == 2:
-            destination_range = True
-
-        if source_range and computer.is_protected:
-            if self.ip_range(computer.ip_address, access_source[0], access_source[1]): # здесь учитываем только отправителей
-                    chk1 = False
-                    for pr in computer.supported_protocols:
-                        if pr in access_net_protocol:
-                            chk1 = True
-                            break
-                    chk2 = False
-                    for port in computer.ports:
-                        if port == access_ports[0]:
-                            chk2 = True
-                    if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
-                        computer.is_allowed = True
-                        computer.is_connected_before = True
-
-        if destination_range and not computer.is_protected:
-            if self.ip_range(computer.ip_address, access_destination[0], access_destination[1]):
-                chk1 = False
-                for pr in computer.supported_protocols:
-                    if pr in access_net_protocol:
-                        chk1 = True
-                        break
-                chk2 = False
-                for port in computer.ports:
-                    if port == access_ports[0]:
-                        chk2 = True
-                if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
-                    computer.is_allowed = True
-                    computer.is_connected_before = True
-
-        elif computer.ip_address in (access_source):
-            if not computer.is_protected:  # здесь учитываем только отправителей
-                return
-            chk1 = False
-            for pr in computer.supported_protocols:
-                if pr in access_net_protocol:
-                    chk1 = True
-                    break
-            chk2 = False
-            for port in computer.ports:
-                if port == access_ports[0]:
-                    chk2 = True
-            if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
-                computer.is_allowed = True
-                computer.is_connected_before = True
-
-        elif computer.ip_address in (access_destination):
-            if computer.is_protected:  # здесь учитываем только получателей
-                return
-            chk1 = False
-            for pr in computer.supported_protocols:
-                if pr in access_net_protocol:
-                    chk1 = True
-                    break
-            chk2 = False
-            for port in computer.ports:
-                if port == access_ports[0]:
-                    chk2 = True
-            if chk1 and chk2:  # условие разрешения соединения  ВЕРНУТЬ and chk2
-                computer.is_allowed = True
-                computer.is_connected_before = True
-
-    def on_button_click(self):
-
-        user_input = self.textEdit.toPlainText ()
-        commands = user_input.splitlines ()
-        print (commands)
-
-        access_destination = []
-        access_source = []
-        access_net_protocol = []
-        access_ports = []
-
-        #!!! КОМАНДЫ ДЛЯ ВВОДА В ТЕКСТОВОЕ ПОЛЕ ПОЛЬЗОВАТЕЛЕМ:
-        #
-        #   set ip sender 000.000.000.000 / set ip sender range 000.000.000.000 255.255.255.255
-        #   set ip receiver 000.000.000.000 / set ip receiver range 000.000.000.000 255.255.255.255
-        #   set ports AAA, BBB, CCC
-        #   set protocol AAA, BBB, CCC
-        #   block ip 000.000.000.000
-        #   remove ports AAA, CCC
-        #   remove protocol AAA, CCC
-        #   clear ip
-        #   clear ports
-        #   clear protocol
-        # ip_add = re.search(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command)
 
 
-        for command in commands:
-            if re.search(r'set ip sender', command):
-                access_source = (re.findall (r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command))
 
-            elif re.search(r'set ip sender range', command):
-                access_source = (re.findall (r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command))
-
-            elif re.search(r'set ip receiver', command):
-                access_destination = (re.findall (r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command))
-
-            elif re.search(r'set ip receiver range', command):
-                access_destination = (re.findall (r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command))
-
-            elif re.search(r'set ports', command):
-                access_ports = (re.findall (r'\b[A-Z]{2,5}\b', command))
-
-            elif re.search(r'set protocol', command):
-                access_net_protocol = (re.findall (r'\b[A-Z]{2,5}\b', command))
-
-            elif re.search(r'block ip', command):
-                self.black_list += (re.findall(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', command))[0]
-
-            elif re.search(r'remove ports', command):
-                for prt in (re.findall(r'\b[A-Z]{2,5}\b', command)):
-                    access_net_protocol.remove(prt)
-
-            elif re.search(r'remove protocol', command):
-                for prt in (re.findall (r'\b[A-Z]{2,5}\b', command)):
-                    access_net_protocol.remove (prt)
-
-            elif re.search(r'clear ip', command):
-                access_source = []
-                access_destination = []
-
-            elif re.search(r'clear ports', command):
-                access_ports = []
-
-            elif re.search(r'clear protocol', command):
-                access_net_protocol = []
-
-            else:
-                continue
-
-        print(access_source)
-        print(access_destination)
-        print(access_net_protocol)
-        print(access_ports)
-
-        checker = 0
-        for comp in self.all_comps:
-            self.check (comp, access_destination, access_source, access_net_protocol, access_ports)
-            print (comp.__name__, comp.is_allowed)
-            if (comp.__name__ == self.protected_comp_for_task.__name__
-                    or comp.__name__ == self.non_protected_comp_for_task.__name__) \
-                    and comp.is_allowed:
-                checker += 1
-        if checker == 2:
-            self.correct_answer.setStyleSheet ('color : green')
-            self.wrong_answer.setStyleSheet ('color : black')
-        else:
-            self.wrong_answer.setStyleSheet ('color : red')
 
 
 if __name__ == "__main__":

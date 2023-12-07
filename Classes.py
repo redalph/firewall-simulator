@@ -14,4 +14,4 @@ class Computer:
         #прописать геттеры и сеттеры для значений
 
     def gen_ip(self):
-        self.ip_address = f"{random.randint (0, 255)}.{random.randint (0, 255)}.{random.randint (0, 255)}.{random.randint (0, 255)}"
+        self.ip_address = f"{random.randint (1, 255)}.{random.randint (1, 255)}.{random.randint (1, 255)}.{random.randint (1, 255)}"
