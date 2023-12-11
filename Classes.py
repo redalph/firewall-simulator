@@ -2,6 +2,7 @@ import random
 import sys
 
 class Computer:
+    name = ''
     ip_address = '000.000.000.000'
     supported_protocols = []
     ports = []
