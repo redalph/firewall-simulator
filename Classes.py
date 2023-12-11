@@ -2,6 +2,7 @@ import random
 import sys
 
 class Computer:
+    name = ''
     ip_address = '000.000.000.000'
     supported_protocols = []
     ports = []
@@ -14,4 +15,4 @@ class Computer:
         #прописать геттеры и сеттеры для значений
 
     def gen_ip(self):
-        self.ip_address = f"{random.randint (0, 255)}.{random.randint (0, 255)}.{random.randint (0, 255)}.{random.randint (0, 255)}"
+        self.ip_address = f"{random.randint (1, 255)}.{random.randint (1, 255)}.{random.randint (1, 255)}.{random.randint (1, 255)}"
